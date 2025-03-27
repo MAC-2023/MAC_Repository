@@ -200,8 +200,8 @@
 
             // Draw the player position and direction
             miniMapContext.fillStyle = 'red';
-            const playerX = (controls.getObject().position.x / cellSize) * miniMapScaleX;
-            const playerZ = (-controls.getObject().position.z / cellSize) * miniMapScaleY;
+            const playerX = (controls.getObject().position.x / mazeWidth) * miniMapCanvas.width;
+            const playerZ = (controls.getObject().position.z / mazeHeight) * miniMapCanvas.height;
             miniMapContext.beginPath();
             miniMapContext.arc(playerX, playerZ, 5, 0, 2 * Math.PI);
             miniMapContext.fill();
