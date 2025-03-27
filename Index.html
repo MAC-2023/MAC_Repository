@@ -20,9 +20,11 @@
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script type="module">
-        import { PointerLockControls } from 'https://threejs.org/examples/jsm/controls/PointerLockControls.js';
-
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+</head>
+<body>
+    <button id="startButton">Start Game</button>
+    <script>
         // Basic setup
         let scene, camera, renderer, controls;
         const objects = [];
@@ -48,7 +50,7 @@
             document.body.appendChild(renderer.domElement);
 
             // PointerLockControls for first-person view
-            controls = new PointerLockControls(camera, document.body);
+            controls = new THREE.PointerLockControls(camera, document.body);
             document.addEventListener('click', () => controls.lock());
 
             scene.add(controls.getObject());
@@ -137,7 +139,6 @@
         // Animate function
         function animate() {
             requestAnimationFrame(animate);
-            controls.update();
             renderer.render(scene, camera);
         }
 
