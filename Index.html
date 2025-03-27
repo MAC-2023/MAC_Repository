@@ -33,7 +33,7 @@
 </head>
 <body>
     <button id="startButton">Start Game</button>
-    <canvas id="miniMap"></canvas>
+    <canvas id="miniMap" width="150" height="150"></canvas>
     <script>
         // Basic setup
         let scene, camera, renderer, controls;
@@ -155,7 +155,8 @@
 
         // Draw the static 2D representation of the maze
         function drawMiniMap(maze) {
-            const miniMapScale = Math.min(miniMapCanvas.width / (mazeWidth * cellSize), miniMapCanvas.height / (mazeHeight * cellSize));
+            const miniMapScaleX = miniMapCanvas.width / (mazeWidth * cellSize);
+            const miniMapScaleY = miniMapCanvas.height / (mazeHeight * cellSize);
 
             miniMapContext.clearRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
             miniMapContext.fillStyle = 'white';
@@ -163,7 +164,7 @@
             for (let z = 0; z < maze.length; z++) {
                 for (let x = 0; x < maze[z].length; x++) {
                     if (maze[z][x] === 1) {
-                        miniMapContext.fillRect(x * cellSize * miniMapScale, z * cellSize * miniMapScale, cellSize * miniMapScale, cellSize * miniMapScale);
+                        miniMapContext.fillRect(x * cellSize * miniMapScaleX, z * cellSize * miniMapScaleY, cellSize * miniMapScaleX, cellSize * miniMapScaleY);
                     }
                 }
             }
@@ -178,7 +179,8 @@
 
         // Update the player's position and direction on the mini map
         function updateMiniMap() {
-            const miniMapScale = Math.min(miniMapCanvas.width / (mazeWidth * cellSize), miniMapCanvas.height / (mazeHeight * cellSize));
+            const miniMapScaleX = miniMapCanvas.width / (mazeWidth * cellSize);
+            const miniMapScaleY = miniMapCanvas.height / (mazeHeight * cellSize);
 
             // Clear the previous player position
             miniMapContext.clearRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
@@ -186,8 +188,8 @@
 
             // Draw the player position and direction
             miniMapContext.fillStyle = 'red';
-            const playerX = controls.getObject().position.x * miniMapScale;
-            const playerZ = -controls.getObject().position.z * miniMapScale;
+            const playerX = controls.getObject().position.x * miniMapScaleX;
+            const playerZ = -controls.getObject().position.z * miniMapScaleY;
             miniMapContext.beginPath();
             miniMapContext.arc(playerX, playerZ, 5, 0, 2 * Math.PI);
             miniMapContext.fill();
