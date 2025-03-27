@@ -18,12 +18,22 @@
             border: none;
             cursor: pointer;
         }
+        #miniMap {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 150px;
+            height: 150px;
+            border: 2px solid #fff;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
 </head>
 <body>
     <button id="startButton">Start Game</button>
+    <canvas id="miniMap"></canvas>
     <script>
         // Basic setup
         let scene, camera, renderer, controls;
@@ -40,6 +50,10 @@
             { x: 1, z: 0 },  // East
             { x: -1, z: 0 }  // West
         ];
+
+        const miniMapCanvas = document.getElementById('miniMap');
+        const miniMapContext = miniMapCanvas.getContext('2d');
+        let maze;
 
         // Initialize scene
         function init() {
@@ -67,10 +81,13 @@
             scene.add(floor);
 
             // Generate and add maze walls
-            const maze = generateMaze(mazeWidth, mazeHeight);
+            maze = generateMaze(mazeWidth, mazeHeight);
             addMazeToScene(maze);
 
             camera.position.set(cellSize / 2, 2, -cellSize / 2);
+
+            // Draw the static 2D representation of the maze
+            drawMiniMap(maze);
 
             // Animate the scene
             animate();
@@ -136,10 +153,54 @@
             }
         }
 
+        // Draw the static 2D representation of the maze
+        function drawMiniMap(maze) {
+            const miniMapScale = miniMapCanvas.width / (mazeWidth * cellSize);
+
+            miniMapContext.clearRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
+            miniMapContext.fillStyle = 'white';
+            
+            for (let z = 0; z < maze.length; z++) {
+                for (let x = 0; x < maze[z].length; x++) {
+                    if (maze[z][x] === 1) {
+                        miniMapContext.fillRect(x * cellSize * miniMapScale, z * cellSize * miniMapScale, cellSize * miniMapScale, cellSize * miniMapScale);
+                    }
+                }
+            }
+        }
+
         // Animate function
         function animate() {
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
+            updateMiniMap();
+        }
+
+        // Update the player's position and direction on the mini map
+        function updateMiniMap() {
+            const miniMapScale = miniMapCanvas.width / (mazeWidth * cellSize);
+
+            // Clear the previous player position
+            miniMapContext.clearRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
+            drawMiniMap(maze);
+
+            // Draw the player position and direction
+            miniMapContext.fillStyle = 'red';
+            const playerX = controls.getObject().position.x * miniMapScale;
+            const playerZ = -controls.getObject().position.z * miniMapScale;
+            miniMapContext.beginPath();
+            miniMapContext.arc(playerX, playerZ, 5, 0, 2 * Math.PI);
+            miniMapContext.fill();
+
+            // Draw the player's direction
+            miniMapContext.strokeStyle = 'red';
+            miniMapContext.beginPath();
+            miniMapContext.moveTo(playerX, playerZ);
+            miniMapContext.lineTo(
+                playerX + Math.sin(controls.getObject().rotation.y) * 10,
+                playerZ - Math.cos(controls.getObject().rotation.y) * 10
+            );
+            miniMapContext.stroke();
         }
 
         // Key controls
