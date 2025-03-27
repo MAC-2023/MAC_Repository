@@ -111,16 +111,22 @@
                     const startButton = document.getElementById('start-button');
                     
                     // Simplified click handling
-                    document.addEventListener('click', () => {
+                    document.addEventListener('click', (event) => {
                         console.log('Document clicked');
                         if (!this.isGameStarted) {
                             this.isGameStarted = true;
                             startScreen.classList.add('hidden');
+                            console.log('Game started');
                         }
                         this.controls.lock();
                     });
 
+                    this.controls.addEventListener('lock', () => {
+                        console.log('Pointer locked');
+                    });
+
                     this.controls.addEventListener('unlock', () => {
+                        console.log('Pointer unlocked');
                         if (this.isGameStarted) {
                             startScreen.classList.remove('hidden');
                         }
@@ -433,4 +439,25 @@
                             }
                         }
                     } else {
-                        console.log('
+                        console.log('No maze layout available');
+                    }
+                }
+
+                gameLoop() {
+                    requestAnimationFrame(() => this.gameLoop());
+                    this.updateMovement();
+                    this.updateMinimap();
+                    this.renderer.render(this.scene, this.camera);
+                }
+            }
+
+            // Start the game
+            try {
+                const game = new Game();
+            } catch (error) {
+                console.error('Error starting game:', error);
+            }
+        });
+    </script>
+</body>
+</html>
