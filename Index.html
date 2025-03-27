@@ -84,7 +84,10 @@
             maze = generateMaze(mazeWidth, mazeHeight);
             addMazeToScene(maze);
 
-            camera.position.set(cellSize / 2, 2, -cellSize / 2);
+            // Set the player's starting position to the center of the 5x5 section
+            const centerX = Math.floor(mazeWidth / 2) * cellSize;
+            const centerZ = -Math.floor(mazeHeight / 2) * cellSize;
+            camera.position.set(centerX, 2, centerZ);
 
             // Draw the static 2D representation of the maze
             drawMiniMap(maze);
@@ -114,6 +117,15 @@
                     maze[next.z][next.x] = 0;
 
                     stack.push(next);
+                }
+            }
+
+            // Ensure the middle 5x5 section has no walls
+            const centerX = Math.floor(width / 2);
+            const centerZ = Math.floor(height / 2);
+            for (let z = centerZ - 2; z <= centerZ + 2; z++) {
+                for (let x = centerX - 2; x <= centerX + 2; x++) {
+                    maze[z][x] = 0;
                 }
             }
 
