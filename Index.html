@@ -155,7 +155,7 @@
 
         // Draw the static 2D representation of the maze
         function drawMiniMap(maze) {
-            const miniMapScale = miniMapCanvas.width / (mazeWidth * cellSize);
+            const miniMapScale = Math.min(miniMapCanvas.width / (mazeWidth * cellSize), miniMapCanvas.height / (mazeHeight * cellSize));
 
             miniMapContext.clearRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
             miniMapContext.fillStyle = 'white';
@@ -178,7 +178,7 @@
 
         // Update the player's position and direction on the mini map
         function updateMiniMap() {
-            const miniMapScale = miniMapCanvas.width / (mazeWidth * cellSize);
+            const miniMapScale = Math.min(miniMapCanvas.width / (mazeWidth * cellSize), miniMapCanvas.height / (mazeHeight * cellSize));
 
             // Clear the previous player position
             miniMapContext.clearRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
