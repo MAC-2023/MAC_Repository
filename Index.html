@@ -33,6 +33,24 @@
             right: 10px;
             color: #fff;
         }
+        #playerAngle {
+            position: absolute;
+            top: 190px;
+            right: 10px;
+            color: #fff;
+        }
+        #collisionText {
+            position: absolute;
+            top: 210px;
+            right: 10px;
+            color: #fff;
+        }
+        #levelText {
+            position: absolute;
+            top: 230px;
+            right: 10px;
+            color: #fff;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
@@ -41,13 +59,18 @@
     <button id="startButton">Start Game</button>
     <canvas id="miniMap" width="150" height="150"></canvas>
     <div id="playerCoords"></div>
+    <div id="playerAngle"></div>
+    <div id="collisionText">Collision: No</div>
+    <div id="levelText">Level: 1</div>
     <script>
         // Basic setup
         let scene, camera, renderer, controls;
         const objects = [];
+        const enemies = [];
+        let currentLevel = 1;
 
-        const mazeWidth = 25; // 50% bigger
-        const mazeHeight = 25; // 50% bigger
+        const mazeWidth = 25; // Updated to 25
+        const mazeHeight = 25; // Updated to 25
         const cellSize = 10;
 
         // Offset variables for fine adjustments
@@ -65,6 +88,9 @@
         const miniMapCanvas = document.getElementById('miniMap');
         const miniMapContext = miniMapCanvas.getContext('2d');
         const playerCoordsDiv = document.getElementById('playerCoords');
+        const playerAngleDiv = document.getElementById('playerAngle');
+        const collisionTextDiv = document.getElementById('collisionText');
+        const levelTextDiv = document.getElementById('levelText');
         let maze;
 
         // Initialize scene
@@ -86,23 +112,39 @@
             scene.add(ambientLight);
 
             // Floor
+            const textureLoader = new THREE.TextureLoader();
+            const floorTexture = textureLoader.load('https://threejs.org/examples/textures/floors/FloorsCheckerboard_S_Diffuse.jpg');
+            floorTexture.wrapS = THREE.RepeatWrapping;
+            floorTexture.wrapT = THREE.RepeatWrapping;
+            floorTexture.repeat.set(8, 8);  // Adjust this value to change the pattern size
+
             const floorGeometry = new THREE.PlaneGeometry(mazeWidth * cellSize, mazeHeight * cellSize);
-            const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x808080 });
+            const floorMaterial = new THREE.MeshBasicMaterial({ map: floorTexture });
             const floor = new THREE.Mesh(floorGeometry, floorMaterial);
             floor.rotation.x = -Math.PI / 2;
+            floor.position.set((mazeWidth * cellSize) / 2 - cellSize / 2, 0, -(mazeHeight * cellSize) / 2 + cellSize / 2);
             scene.add(floor);
+
+            // Load wall texture
+            const wallTexture = textureLoader.load('https://threejs.org/examples/textures/brick_diffuse.jpg');
+            wallTexture.wrapS = THREE.RepeatWrapping;
+            wallTexture.wrapT = THREE.RepeatWrapping;
+            wallTexture.repeat.set(0.5, 0.5);
 
             // Generate and add maze walls
             maze = generateMaze(mazeWidth, mazeHeight);
-            addMazeToScene(maze);
+            addMazeToScene(maze, wallTexture);
 
-            // Set the player's starting position to the center of the 5x5 section
+            // Set the player's starting position to the center of the 5x5 section and move up vertically
             const centerX = Math.floor(mazeWidth / 2) * cellSize;
             const centerZ = -Math.floor(mazeHeight / 2) * cellSize;
-            camera.position.set(centerX, 2, centerZ);
+            camera.position.set(centerX, 5, centerZ); // Increase the y value to move the player up
 
             // Draw the static 2D representation of the maze
             drawMiniMap(maze);
+
+            // Spawn enemies for the current level
+            spawnEnemiesForLevel(currentLevel);
 
             // Animate the scene
             animate();
@@ -141,7 +183,20 @@
                 }
             }
 
+            // Add more gaps in the maze walls
+            addGapsToMaze(maze);
+
             return maze;
+        }
+
+        // Add more gaps in the maze walls
+        function addGapsToMaze(maze) {
+            const additionalGaps = Math.floor((mazeWidth * mazeHeight) / 10); // Adjust this value as needed
+            for (let i = 0; i < additionalGaps; i++) {
+                const x = Math.floor(Math.random() * mazeWidth);
+                const z = Math.floor(Math.random() * mazeHeight);
+                maze[z][x] = 0;
+            }
         }
 
         // Get unvisited neighbors
@@ -161,15 +216,17 @@
         }
 
         // Add maze walls to the scene
-        function addMazeToScene(maze) {
+        function addMazeToScene(maze, wallTexture) {
             const wallGeometry = new THREE.BoxGeometry(cellSize, 10, cellSize);
-            const wallMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+            const wallMaterial = new THREE.MeshBasicMaterial({ map: wallTexture });
 
             for (let z = 0; z < maze.length; z++) {
                 for (let x = 0; x < maze[z].length; x++) {
                     if (maze[z][x] === 1) {
                         const wall = new THREE.Mesh(wallGeometry, wallMaterial);
                         wall.position.set(x * cellSize, 5, -z * cellSize);
+                        wall.userData.isWall = true; // Marking wall objects
+                        wall.userData.boundingBox = new THREE.Box3().setFromObject(wall); // Add bounding box
                         scene.add(wall);
                         objects.push(wall);
                     }
@@ -192,6 +249,60 @@
                     }
                 }
             }
+
+            // Draw enemies on the minimap
+            miniMapContext.fillStyle = 'blue'; // Color for enemies
+            for (const enemy of enemies) {
+                const enemyX = (enemy.position.x * miniMapScaleX) + X_offset;
+                const enemyZ = (-enemy.position.z * miniMapScaleY) + Y_offset;
+                miniMapContext.beginPath();
+                miniMapContext.arc(enemyX, enemyZ, 3, 0, 2 * Math.PI); // Smaller radius for enemies
+                miniMapContext.fill();
+            }
+        }
+
+        // Check for collision detection using bounding boxes
+        function checkCollision() {
+            const playerBoundingBox = new THREE.Box3().setFromCenterAndSize(
+                controls.getObject().position,
+                new THREE.Vector3(1, 2, 1) // Adjust the size as needed
+            );
+            const collisionDistance = cellSize * 0.75; // Increase the collision distance threshold
+
+            for (const object of objects) {
+                if (object.userData.isWall) {
+                    if (playerBoundingBox.intersectsBox(object.userData.boundingBox)) {
+                        collisionTextDiv.innerHTML = 'Collision: Yes';
+                        return true; // Collision detected
+                    }
+                }
+            }
+            collisionTextDiv.innerHTML = 'Collision: No';
+            return false; // No collision
+        }
+
+        // Add enemies to the scene
+        function spawnEnemiesForLevel(level) {
+            // Clear existing enemies
+            for (const enemy of enemies) {
+                scene.remove(enemy);
+            }
+            enemies.length = 0;
+
+            // Spawn new enemies based on the level
+            const enemyCount = level * 5; // Example: 5 enemies per level
+            for (let i = 0; i < enemyCount; i++) {
+                const enemyGeometry = new THREE.BoxGeometry(1, 2, 1);
+                const enemyMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+                const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+                // Random position within the maze
+                const x = Math.floor(Math.random() * mazeWidth) * cellSize;
+                const z = -Math.floor(Math.random() * mazeHeight) * cellSize;
+                enemy.position.set(x, 1, z);
+                enemy.userData.type = 'zombie';
+                scene.add(enemy);
+                enemies.push(enemy);
+            }
         }
 
         // Animate function
@@ -199,6 +310,7 @@
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
             updateMiniMap();
+            updateEnemies();
         }
 
         // Update the player's position and direction on the mini map and display coordinates
@@ -218,18 +330,106 @@
             miniMapContext.arc(playerX, playerZ, 5, 0, 2 * Math.PI);
             miniMapContext.fill();
 
+            // Correct the player's direction using camera world direction
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            const angle = Math.atan2(direction.x, direction.z);
+
+            // Convert the angle to degrees and adjust the range from 0 to 360
+            let angleInDegrees = THREE.MathUtils.radToDeg(angle);
+            if (angleInDegrees < 0) {
+                angleInDegrees += 360;
+            }
+
             // Draw the player's direction
+            const directionX = Math.sin(angle);
+            const directionZ = Math.cos(angle);
             miniMapContext.strokeStyle = 'red';
             miniMapContext.beginPath();
             miniMapContext.moveTo(playerX, playerZ);
             miniMapContext.lineTo(
-                playerX + Math.cos(controls.getObject().rotation.y) * 10,
-                playerZ - Math.sin(controls.getObject().rotation.y) * 10
+                playerX + directionX * 10,
+                playerZ - directionZ * 10
             );
             miniMapContext.stroke();
 
-            // Display the player's actual coordinates
+            // Display the player's actual coordinates and angle
             playerCoordsDiv.innerHTML = `Player Coordinates: X: ${controls.getObject().position.x.toFixed(2)}, Z: ${controls.getObject().position.z.toFixed(2)}`;
+            playerAngleDiv.innerHTML = `Player Angle: Y: ${angleInDegrees.toFixed(2)}°`;
+        }
+
+        // Update enemies
+        function updateEnemies() {
+            for (const enemy of enemies) {
+                if (enemy.userData.type === 'zombie') {
+                    // Implement simple AI behavior for zombies
+                    moveTowardsPlayer(enemy);
+                }
+            }
+        }
+
+        // Move enemy towards the player
+        function moveTowardsPlayer(enemy) {
+            const playerPosition = controls.getObject().position;
+            const direction = new THREE.Vector3().subVectors(playerPosition, enemy.position).normalize();
+            const speed = 0.02; // Adjust speed as needed
+            const proposedPosition = enemy.position.clone().add(direction.multiplyScalar(speed));
+            
+            if (!checkEnemyCollision(proposedPosition)) {
+                enemy.position.copy(proposedPosition);
+            } else {
+                // Calculate sliding vector
+                const collisionNormal = getCollisionNormal(enemy.position);
+                const slideDirection = direction.clone().sub(collisionNormal.multiplyScalar(direction.dot(collisionNormal)));
+                const slidePosition = enemy.position.clone().add(slideDirection.multiplyScalar(speed));
+
+                if (!checkEnemyCollision(slidePosition)) {
+                    enemy.position.copy(slidePosition);
+                }
+            }
+        }
+
+        // Check for collision detection for enemies
+        function checkEnemyCollision(position) {
+            const enemyBoundingBox = new THREE.Box3().setFromCenterAndSize(
+                position,
+                new THREE.Vector3(1, 2, 1) // Adjust the size as needed
+            );
+
+            for (const object of objects) {
+                if (object.userData.isWall) {
+                    if (enemyBoundingBox.intersectsBox(object.userData.boundingBox)) {
+                        return true; // Collision detected
+                    }
+                }
+            }
+            return false; // No collision
+        }
+
+        // Get collision normal for sliding
+        function getCollisionNormal(position) {
+            const enemyBoundingBox = new THREE.Box3().setFromCenterAndSize(
+                position,
+                new THREE.Vector3(1, 2, 1) // Adjust the size as needed
+            );
+
+            for (const object of objects) {
+                if (object.userData.isWall) {
+                    if (enemyBoundingBox.intersectsBox(object.userData.boundingBox)) {
+                        const collisionNormal = new THREE.Vector3();
+                        object.userData.boundingBox.getNormal(collisionNormal);
+                        return collisionNormal;
+                    }
+                }
+            }
+            return new THREE.Vector3();
+        }
+
+        // Level progression function
+        function nextLevel() {
+            currentLevel++;
+            levelTextDiv.innerHTML = `Level: ${currentLevel}`;
+            spawnEnemiesForLevel(currentLevel);
         }
 
         // Key controls
@@ -255,25 +455,22 @@
         // Movement logic
         function move() {
             const speed = 0.1;
-            if (keys.KeyW || keys.ArrowUp) controls.moveForward(speed);
-            if (keys.KeyS || keys.ArrowDown) controls.moveForward(-speed);
-            if (keys.KeyA || keys.ArrowLeft) controls.moveRight(-speed);
-            if (keys.KeyD || keys.ArrowRight) controls.moveRight(speed);
+            if (keys.KeyW || keys.ArrowUp) {
+                controls.moveForward(speed);
+                if (checkCollision()) controls.moveForward(-speed); // Undo movement on collision
+            }
+            if (keys.KeyS || keys.ArrowDown) {
+                controls.moveForward(-speed);
+                if (checkCollision()) controls.moveForward(speed); // Undo movement on collision
+            }
+            if (keys.KeyA || keys.ArrowLeft) {
+                controls.moveRight(-speed);
+                if (checkCollision()) controls.moveRight(speed); // Undo movement on collision
+            }
+            if (keys.KeyD || keys.ArrowRight) {
+                controls.moveRight(speed);
+                if (checkCollision()) controls.moveRight(-speed); // Undo movement on collision
+            }
         }
 
-        // Start game button
-        const startButton = document.getElementById('startButton');
-        startButton.addEventListener('click', () => {
-            startButton.style.display = 'none';
-            init();
-            update();
-        });
-
-        // Update function
-        function update() {
-            move();
-            requestAnimationFrame(update);
-        }
-    </script>
-</body>
-</html>
+       
