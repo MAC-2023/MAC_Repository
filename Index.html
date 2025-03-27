@@ -285,8 +285,9 @@
 
                 checkCollision(x, z) {
                     // Convert world coordinates to maze grid coordinates
-                    const gridX = Math.floor(x / 20);
-                    const gridZ = Math.floor(z / 20);
+                    const buffer = 0.1; // Buffer distance to prevent getting too close to walls
+                    const gridX = Math.floor((x + buffer) / 20);
+                    const gridZ = Math.floor((z + buffer) / 20);
 
                     // Check if the position is within maze bounds
                     if (gridX < 0 || gridX >= this.mazeLayout[0].length || 
@@ -432,27 +433,4 @@
                             }
                         }
                     } else {
-                        console.log('No maze layout available');
-                    }
-                }
-
-                
-
-                gameLoop() {
-                    requestAnimationFrame(() => this.gameLoop());
-                    this.updateMovement();
-                    this.updateMinimap();
-                    this.renderer.render(this.scene, this.camera);
-                }
-            }
-
-            // Start the game
-            try {
-                const game = new Game();
-            } catch (error) {
-                console.error('Error starting game:', error);
-            }
-        });
-    </script>
-</body>
-</html>
+                        console.log('
