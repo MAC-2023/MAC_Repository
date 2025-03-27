@@ -377,15 +377,6 @@
             
             if (!checkEnemyCollision(proposedPosition)) {
                 enemy.position.copy(proposedPosition);
-            } else {
-                // Calculate sliding vector
-                const collisionNormal = getCollisionNormal(enemy.position);
-                const slideDirection = direction.clone().sub(collisionNormal.multiplyScalar(direction.dot(collisionNormal)));
-                const slidePosition = enemy.position.clone().add(slideDirection.multiplyScalar(speed));
-
-                if (!checkEnemyCollision(slidePosition)) {
-                    enemy.position.copy(slidePosition);
-                }
             }
         }
 
@@ -404,25 +395,6 @@
                 }
             }
             return false; // No collision
-        }
-
-        // Get collision normal for sliding
-        function getCollisionNormal(position) {
-            const enemyBoundingBox = new THREE.Box3().setFromCenterAndSize(
-                position,
-                new THREE.Vector3(1, 2, 1) // Adjust the size as needed
-            );
-
-            for (const object of objects) {
-                if (object.userData.isWall) {
-                    if (enemyBoundingBox.intersectsBox(object.userData.boundingBox)) {
-                        const collisionNormal = new THREE.Vector3();
-                        object.userData.boundingBox.getNormal(collisionNormal);
-                        return collisionNormal;
-                    }
-                }
-            }
-            return new THREE.Vector3();
         }
 
         // Level progression function
@@ -473,4 +445,19 @@
             }
         }
 
-       
+        // Start game button
+        const startButton = document.getElementById('startButton');
+        startButton.addEventListener('click', () => {
+            startButton.style.display = 'none';
+            init();
+            update();
+        });
+
+        // Update function
+        function update() {
+            move();
+            requestAnimationFrame(update);
+        }
+    </script>
+</body>
+</html>
