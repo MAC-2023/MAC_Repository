@@ -290,19 +290,34 @@
                 }
 
                 checkCollision(x, z) {
-                    // Convert world coordinates to maze grid coordinates
-                    const buffer = 0.1; // Buffer distance to prevent getting too close to walls
-                    const gridX = Math.floor((x + buffer) / 20);
-                    const gridZ = Math.floor((z + buffer) / 20);
+                    const buffer = 1.0; // Increase buffer distance
+                    const playerSize = 1.0; // Size of the player
 
-                    // Check if the position is within maze bounds
-                    if (gridX < 0 || gridX >= this.mazeLayout[0].length || 
-                        gridZ < 0 || gridZ >= this.mazeLayout.length) {
-                        return true;
+                    // Check all corners of the player's bounding box
+                    const corners = [
+                        { x: x - playerSize / 2, z: z - playerSize / 2 },
+                        { x: x + playerSize / 2, z: z - playerSize / 2 },
+                        { x: x - playerSize / 2, z: z + playerSize / 2 },
+                        { x: x + playerSize / 2, z: z + playerSize / 2 }
+                    ];
+
+                    for (const corner of corners) {
+                        const gridX = Math.floor((corner.x + buffer) / 20);
+                        const gridZ = Math.floor((corner.z + buffer) / 20);
+
+                        // Check if the position is within maze bounds
+                        if (gridX < 0 || gridX >= this.mazeLayout[0].length || 
+                            gridZ < 0 || gridZ >= this.mazeLayout.length) {
+                            return true;
+                        }
+
+                        // Check if the current grid cell is a wall
+                        if (this.mazeLayout[gridZ][gridX] === 1) {
+                            return true;
+                        }
                     }
 
-                    // Check if the current grid cell is a wall
-                    return this.mazeLayout[gridZ][gridX] === 1;
+                    return false;
                 }
 
                 updateMovement() {
@@ -371,93 +386,4 @@
                             mazeLayout: this.mazeLayout
                         });
                     } catch (error) {
-                        console.error('Error initializing minimap:', error);
-                    }
-                }
-
-                updateMinimap() {
-                    if (!this.minimapCtx || !this.minimapCanvas) {
-                        console.log('Minimap not initialized');
-                        return;
-                    }
-
-                    var ctx = this.minimapCtx;
-                    var canvas = this.minimapCanvas;
-
-                    // Clear canvas
-                    ctx.fillStyle = '#000000';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                    // Draw maze cells
-                    if (this.mazeLayout && this.mazeLayout.length > 0) {
-                        // Calculate cell size to fit the maze in the canvas with padding
-                        var padding = 20;
-                        var cellSize = Math.min(
-                            (canvas.width - padding * 2) / this.mazeLayout[0].length,
-                            (canvas.height - padding * 2) / this.mazeLayout.length
-                        );
-
-                        // Center the maze in the canvas
-                        var offsetX = (canvas.width - this.mazeLayout[0].length * cellSize) / 2;
-                        var offsetY = (canvas.height - this.mazeLayout.length * cellSize) / 2;
-
-                        // Draw each cell
-                        for (var i = 0; i < this.mazeLayout.length; i++) {
-                            for (var j = 0; j < this.mazeLayout[i].length; j++) {
-                                var cellX = j * cellSize + offsetX;
-                                var cellY = i * cellSize + offsetY;
-                                ctx.fillStyle = this.mazeLayout[i][j] === 1 ? '#FFFFFF' : '#444444';
-                                ctx.fillRect(cellX, cellY, cellSize - 1, cellSize - 1);
-                            }
-                        }
-
-                        // Draw player position
-                        if (this.camera) {
-                            // Convert world coordinates to minimap coordinates
-                            var playerX = (this.camera.position.x / 20) * cellSize + offsetX;
-                            var playerZ = (this.camera.position.z / 20) * cellSize + offsetY;
-                            
-                            // Draw player dot
-                            ctx.fillStyle = '#FF0000';
-                            ctx.beginPath();
-                            ctx.arc(playerX, playerZ, cellSize/3, 0, Math.PI * 2);
-                            ctx.fill();
-
-                            // Draw direction arrow
-                            if (this.controls) {
-                                var rotation = this.controls.getObject().rotation.y;
-                                var arrowLength = cellSize;
-                                var arrowX = playerX + Math.sin(rotation) * arrowLength;
-                                var arrowZ = playerZ + Math.cos(rotation) * arrowLength;
-                                
-                                ctx.strokeStyle = '#FF0000';
-                                ctx.lineWidth = 2;
-                                ctx.beginPath();
-                                ctx.moveTo(playerX, playerZ);
-                                ctx.lineTo(arrowX, arrowZ);
-                                ctx.stroke();
-                            }
-                        }
-                    } else {
-                        console.log('No maze layout available');
-                    }
-                }
-
-                gameLoop() {
-                    requestAnimationFrame(() => this.gameLoop());
-                    this.updateMovement();
-                    this.updateMinimap();
-                    this.renderer.render(this.scene, this.camera);
-                }
-            }
-
-            // Start the game
-            try {
-                const game = new Game();
-            } catch (error) {
-                console.error('Error starting game:', error);
-            }
-        });
-    </script>
-</body>
-</html>
+                        console.error('Error
