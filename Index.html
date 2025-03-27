@@ -27,6 +27,12 @@
             border: 2px solid #fff;
             background-color: rgba(0, 0, 0, 0.5);
         }
+        #playerCoords {
+            position: absolute;
+            top: 170px;
+            right: 10px;
+            color: #fff;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
@@ -34,6 +40,7 @@
 <body>
     <button id="startButton">Start Game</button>
     <canvas id="miniMap" width="150" height="150"></canvas>
+    <div id="playerCoords"></div>
     <script>
         // Basic setup
         let scene, camera, renderer, controls;
@@ -53,6 +60,7 @@
 
         const miniMapCanvas = document.getElementById('miniMap');
         const miniMapContext = miniMapCanvas.getContext('2d');
+        const playerCoordsDiv = document.getElementById('playerCoords');
         let maze;
 
         // Initialize scene
@@ -189,7 +197,7 @@
             updateMiniMap();
         }
 
-        // Update the player's position and direction on the mini map
+        // Update the player's position and direction on the mini map and display coordinates
         function updateMiniMap() {
             const miniMapScaleX = miniMapCanvas.width / (mazeWidth * cellSize);
             const miniMapScaleY = miniMapCanvas.height / (mazeHeight * cellSize);
@@ -200,8 +208,8 @@
 
             // Draw the player position and direction
             miniMapContext.fillStyle = 'red';
-            const playerX = (controls.getObject().position.x + (mazeWidth / 2) * cellSize) * miniMapScaleX;
-            const playerZ = (-(controls.getObject().position.z) + (mazeHeight / 2) * cellSize) * miniMapScaleY;
+            const playerX = controls.getObject().position.x * miniMapScaleX;
+            const playerZ = (-controls.getObject().position.z) * miniMapScaleY;
             miniMapContext.beginPath();
             miniMapContext.arc(playerX, playerZ, 5, 0, 2 * Math.PI);
             miniMapContext.fill();
@@ -212,9 +220,12 @@
             miniMapContext.moveTo(playerX, playerZ);
             miniMapContext.lineTo(
                 playerX + Math.cos(controls.getObject().rotation.y) * 10,
-                playerZ + Math.sin(controls.getObject().rotation.y) * 10
+                playerZ - Math.sin(controls.getObject().rotation.y) * 10
             );
             miniMapContext.stroke();
+
+            // Display the player's actual coordinates
+            playerCoordsDiv.innerHTML = `Player Coordinates: X: ${controls.getObject().position.x.toFixed(2)}, Z: ${controls.getObject().position.z.toFixed(2)}`;
         }
 
         // Key controls
