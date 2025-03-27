@@ -1,10 +1,448 @@
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Et magnis dis parturient montes. A cras semper auctor neque vitae tempus quam. Diam maecenas ultricies mi eget mauris pharetra et. Molestie ac feugiat sed lectus vestibulum. Congue mauris rhoncus aenean vel elit scelerisque mauris pellentesque pulvinar. Morbi tristique senectus et netus et malesuada fames. Maecenas volutpat blandit aliquam etiam. Purus in massa tempor nec feugiat nisl. Turpis tincidunt id aliquet risus feugiat in ante metus dictum. Tristique sollicitudin nibh sit amet commodo nulla facilisi nullam vehicula. Amet porttitor eget dolor morbi non.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D DOOM-like Maze Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #minimap {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid white;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        #game-container { width: 100%; height: 100%; }
+        .overlay { display: flex; align-items: center; justify-content: center; position: fixed; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); z-index: 999; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div id="start-screen" class="overlay">
+        <div class="start-content">
+            <h1>DOOM-like Maze Game</h1>
+            <div id="instructions">
+                Click to start<br>
+                WASD to move<br>
+                Mouse to look<br>
+                Click to shoot
+            </div>
+            <button id="start-button">START GAME</button>
+        </div>
+    </div>
+    <div id="game-container">
+        <div id="hud">
+            <div id="health">Health: 100</div>
+            <div id="ammo">Ammo: 50</div>
+            <div id="shield">Shield: 0</div>
+        </div>
+        <div id="crosshair">+</div>
+        <canvas id="minimap" width="200" height="200"></canvas>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <script>
+        // Function to check if Three.js is loaded
+        function checkThreeJS() {
+            if (typeof THREE === 'undefined') {
+                console.error('Three.js is not loaded!');
+                return false;
+            }
+            return true;
+        }
 
-Nibh ipsum consequat nisl vel pretium lectus. Sodales ut eu sem integer vitae justo. Enim lobortis scelerisque fermentum dui faucibus in. Enim ut sem viverra aliquet eget sit. Quam id leo in vitae turpis massa sed elementum tempus. Elit scelerisque mauris pellentesque pulvinar pellentesque. Tempus imperdiet nulla malesuada pellentesque elit eget gravida cum. Diam maecenas sed enim ut sem viverra aliquet eget. Arcu dictum varius duis at consectetur lorem donec massa sapien. Iaculis at erat pellentesque adipiscing commodo elit at imperdiet dui. Fermentum dui faucibus in ornare. Imperdiet nulla malesuada pellentesque elit. Quis lectus nulla at volutpat diam ut. Consectetur purus ut faucibus pulvinar elementum integer enim neque. Bibendum at varius vel pharetra vel turpis. Malesuada fames ac turpis egestas sed tempus urna et. Enim eu turpis egestas pretium aenean pharetra magna.
+        // Wait for scripts to load
+        window.addEventListener('load', () => {
+            if (!checkThreeJS()) return;
 
-Interdum consectetur libero id faucibus nisl tincidunt eget. Diam vulputate ut pharetra sit amet aliquam id diam. Commodo nulla facilisi nullam vehicula ipsum a arcu cursus. Et malesuada fames ac turpis egestas. Nibh ipsum consequat nisl vel pretium lectus. Sit amet nisl purus in mollis. Lorem ipsum dolor sit amet consectetur adipiscing elit. Sollicitudin tempor id eu nisl. Aliquet nec ullamcorper sit amet risus. Enim blandit volutpat maecenas volutpat blandit aliquam etiam erat velit. Donec enim diam vulputate ut pharetra sit. Tellus id interdum velit laoreet id donec ultrices tincidunt. Ut diam quam nulla porttitor massa id neque. Id eu nisl nunc mi ipsum faucibus vitae aliquet. Scelerisque felis imperdiet proin fermentum leo vel orci porta non. Amet risus nullam eget felis eget nunc lobortis mattis. A cras semper auctor neque.
 
-Pellentesque habitant morbi tristique senectus. Venenatis a condimentum vitae sapien pellentesque. Arcu dui vivamus arcu felis bibendum ut tristique et. In metus vulputate eu scelerisque felis imperdiet proin fermentum. Pretium nibh ipsum consequat nisl vel. Adipiscing commodo elit at imperdiet dui. A scelerisque purus semper eget duis. Enim sed faucibus turpis in eu mi. Sagittis id consectetur purus ut faucibus pulvinar. Quisque sagittis purus sit amet volutpat consequat mauris. Lectus urna duis convallis convallis tellus id interdum velit. Sit amet volutpat consequat mauris nunc congue nisi vitae suscipit. Ut consequat semper viverra nam libero. At consectetur lorem donec massa. Pellentesque elit ullamcorper dignissim cras tincidunt. Et egestas quis ipsum suspendisse ultrices gravida dictum fusce. Tempor nec feugiat nisl pretium fusce id velit ut tortor. Mattis vulputate enim nulla aliquet porttitor lacus. Elementum curabitur vitae nunc sed.
+        class Game {
+            constructor() {
+                this.isGameStarted = false;
+                this.initScene();
+                this.initControls();
+                this.initMaze();
+                this.initMinimap();  // Initialize minimap after maze is created
+                this.setupEventListeners();
+                this.gameLoop();
+            }
 
-Egestas pretium aenean pharetra magna ac placerat vestibulum lectus mauris. At urna condimentum mattis pellentesque id nibh tortor id. Bibendum enim facilisis gravida neque convallis a. Rhoncus dolor purus non enim praesent elementum. Lacus laoreet non curabitur gravida. Malesuada proin libero nunc consequat interdum varius sit amet mattis. Velit ut tortor pretium viverra suspendisse. Maecenas accumsan lacus vel facilisis volutpat est velit. Orci dapibus ultrices in iaculis nunc. Fringilla ut morbi tincidunt augue interdum velit. Nibh tortor id aliquet lectus. Lectus nulla at volutpat diam ut venenatis tellus in. Tortor at auctor urna nunc id. Praesent semper feugiat nibh sed pulvinar proin. Quisque sagittis purus sit amet. Lobortis scelerisque fermentum dui faucibus in ornare quam. Lectus magna fringilla urna porttitor rhoncus dolor purus non enim. Ipsum nunc aliquet bibendum enim facilisis gravida neque convallis a.
+            initScene() {
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.renderer = new THREE.WebGLRenderer();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                document.getElementById('game-container').appendChild(this.renderer.domElement);
 
+                // Add lighting
+                const ambientLight = new THREE.AmbientLight(0x404040);
+                this.scene.add(ambientLight);
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+                directionalLight.position.set(0, 1, 0);
+                this.scene.add(directionalLight);
+
+                // Set initial camera position
+                this.camera.position.set(15, 5, 15);
+            }
+
+            initControls() {
+                this.controls = new THREE.PointerLockControls(this.camera, document.body);
+                this.moveForward = false;
+                this.moveBackward = false;
+                this.moveLeft = false;
+                this.moveRight = false;
+                this.velocity = new THREE.Vector3();
+                this.direction = new THREE.Vector3();
+                this.speed = 0.21; // Increased by 40%
+
+                // Setup start screen and pointer lock
+                const startScreen = document.getElementById('start-screen');
+                const startButton = document.getElementById('start-button');
+                
+                // Simplified click handling
+                document.addEventListener('click', () => {
+                    if (!this.isGameStarted) {
+                        this.isGameStarted = true;
+                        startScreen.classList.add('hidden');
+                    }
+                    this.controls.lock();
+                });
+
+                this.controls.addEventListener('unlock', () => {
+                    if (this.isGameStarted) {
+                        startScreen.classList.remove('hidden');
+                    }
+                });
+            }
+
+            generateMaze(width, height) {
+                // Initialize maze with all walls
+                const maze = Array(height).fill().map(() => Array(width).fill(1));
+                const stack = [];
+                
+                // Calculate center coordinates
+                const centerX = Math.floor(width / 2);
+                const centerY = Math.floor(height / 2);
+                
+                // Create a 5x5 empty area in the center
+                for (let y = centerY - 2; y <= centerY + 2; y++) {
+                    for (let x = centerX - 2; x <= centerX + 2; x++) {
+                        if (y >= 0 && y < height && x >= 0 && x < width) {
+                            maze[y][x] = 0;
+                        }
+                    }
+                }
+
+                // Start maze generation from the center
+                const start = { x: centerX, y: centerY };
+                stack.push(start);
+
+                const directions = [
+                    { dx: 0, dy: -3 },  // up (wider spacing)
+                    { dx: 3, dy: 0 },   // right
+                    { dx: 0, dy: 3 },   // down
+                    { dx: -3, dy: 0 }   // left
+                ];
+
+                while (stack.length > 0) {
+                    const current = stack[stack.length - 1];
+                    const neighbors = [];
+
+                    // Check all directions
+                    for (const dir of directions) {
+                        const newX = current.x + dir.dx;
+                        const newY = current.y + dir.dy;
+
+                        if (newX > 0 && newX < width - 1 && newY > 0 && newY < height - 1 && maze[newY][newX] === 1) {
+                            neighbors.push({ x: newX, y: newY, dx: dir.dx / 3, dy: dir.dy / 3 });
+                        }
+                    }
+
+                    if (neighbors.length > 0) {
+                        const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                        
+                        // Create wider corridors by clearing a 2x2 area
+                        for (let dy = -1; dy <= 1; dy++) {
+                            for (let dx = -1; dx <= 1; dx++) {
+                                const y = current.y + next.dy * 2 + dy;
+                                const x = current.x + next.dx * 2 + dx;
+                                if (y >= 0 && y < height && x >= 0 && x < width) {
+                                    maze[y][x] = 0;
+                                }
+                            }
+                        }
+                        
+                        maze[next.y][next.x] = 0;
+                        stack.push({ x: next.x, y: next.y });
+                    } else {
+                        stack.pop();
+                    }
+                }
+
+                return maze;
+            }
+
+            initMaze() {
+                // Generate random maze (21x21 for a good size and to ensure center)
+                this.mazeLayout = this.generateMaze(21, 21);
+
+                // Create maze walls with wider corridors
+                const wallGeometry = new THREE.BoxGeometry(20, 20, 20);
+                const wallMaterial = new THREE.MeshPhongMaterial({ color: 0x808080 });
+
+                // Position camera in the center clear area
+                const centerX = Math.floor(this.mazeLayout[0].length / 2) * 20;
+                const centerZ = Math.floor(this.mazeLayout.length / 2) * 20;
+                this.camera.position.set(centerX, 10, centerZ);
+
+                for (let i = 0; i < this.mazeLayout.length; i++) {
+                    for (let j = 0; j < this.mazeLayout[i].length; j++) {
+                        if (this.mazeLayout[i][j] === 1) {
+                            const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+                            wall.position.set(j * 20, 10, i * 20);
+                            this.scene.add(wall);
+                        }
+                    }
+                }
+
+                // Add floor
+                const floorGeometry = new THREE.PlaneGeometry(300, 300);  // Increased size for larger maze
+                const floorMaterial = new THREE.MeshPhongMaterial({ color: 0x404040 });
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.position.y = 0;
+                this.scene.add(floor);
+
+                // Add ceiling
+                const ceiling = new THREE.Mesh(floorGeometry, floorMaterial);
+                ceiling.rotation.x = Math.PI / 2;
+                ceiling.position.y = 20;  // Doubled height to match walls
+                this.scene.add(ceiling);
+            }
+
+            setupEventListeners() {
+                document.addEventListener('keydown', (event) => {
+                    switch (event.code) {
+                        case 'ArrowUp':
+                        case 'KeyW':
+                            this.moveForward = true;
+                            break;
+                        case 'ArrowDown':
+                        case 'KeyS':
+                            this.moveBackward = true;
+                            break;
+                        case 'ArrowLeft':
+                        case 'KeyA':
+                            this.moveLeft = true;
+                            break;
+                        case 'ArrowRight':
+                        case 'KeyD':
+                            this.moveRight = true;
+                            break;
+                    }
+                });
+
+                document.addEventListener('keyup', (event) => {
+                    switch (event.code) {
+                        case 'ArrowUp':
+                        case 'KeyW':
+                            this.moveForward = false;
+                            break;
+                        case 'ArrowDown':
+                        case 'KeyS':
+                            this.moveBackward = false;
+                            break;
+                        case 'ArrowLeft':
+                        case 'KeyA':
+                            this.moveLeft = false;
+                            break;
+                        case 'ArrowRight':
+                        case 'KeyD':
+                            this.moveRight = false;
+                            break;
+                    }
+                });
+
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+            }
+
+            checkCollision(x, z) {
+                // Convert world coordinates to maze grid coordinates
+                const gridX = Math.floor(x / 20);
+                const gridZ = Math.floor(z / 20);
+
+                // Check if the position is within maze bounds
+                if (gridX < 0 || gridX >= this.mazeLayout[0].length || 
+                    gridZ < 0 || gridZ >= this.mazeLayout.length) {
+                    return true;
+                }
+
+                // Check if the current grid cell is a wall
+                return this.mazeLayout[gridZ][gridX] === 1;
+            }
+
+            updateMovement() {
+                if (this.controls.isLocked) {
+                    // Reset velocity
+                    this.velocity.x = 0;
+                    this.velocity.z = 0;
+                    this.direction.x = 0;
+                    this.direction.z = 0;
+
+                    // Get movement direction relative to camera
+                    if (this.moveForward) this.direction.z = 1;
+                    if (this.moveBackward) this.direction.z = -1;
+                    if (this.moveLeft) this.direction.x = -1;
+                    if (this.moveRight) this.direction.x = 1;
+
+                    // Normalize direction vector to maintain consistent speed when moving diagonally
+                    if (this.direction.x !== 0 || this.direction.z !== 0) {
+                        this.direction.normalize();
+                        this.velocity.x = this.direction.x * this.speed;
+                        this.velocity.z = this.direction.z * this.speed;
+                    }
+
+                    if (this.velocity.x !== 0 || this.velocity.z !== 0) {
+                        // Try to move in X direction
+                        const nextX = this.camera.position.x + this.velocity.x;
+                        if (!this.checkCollision(nextX, this.camera.position.z)) {
+                            this.controls.moveRight(this.velocity.x);
+                        }
+
+                        // Try to move in Z direction
+                        const nextZ = this.camera.position.z + this.velocity.z;
+                        if (!this.checkCollision(this.camera.position.x, nextZ)) {
+                            this.controls.moveForward(this.velocity.z);
+                        }
+                    }
+                }
+            }
+
+            initMinimap() {
+                try {
+                    this.minimapCanvas = document.getElementById('minimap');
+                    if (!this.minimapCanvas) {
+                        console.error('Minimap canvas not found');
+                        return;
+                    }
+
+                    // Force canvas size
+                    this.minimapCanvas.width = 200;
+                    this.minimapCanvas.height = 200;
+
+                    this.minimapCtx = this.minimapCanvas.getContext('2d');
+
+                    // Test canvas by drawing a simple shape
+                    this.minimapCtx.fillStyle = '#FF0000';
+                    this.minimapCtx.fillRect(0, 0, 50, 50);
+                    console.log('Drew test rectangle');
+
+                    this.cellSize = Math.floor(this.minimapCanvas.width / this.mazeLayout[0].length);
+                    console.log('Minimap initialized:', {
+                        canvasWidth: this.minimapCanvas.width,
+                        canvasHeight: this.minimapCanvas.height,
+                        mazeWidth: this.mazeLayout[0].length,
+                        mazeHeight: this.mazeLayout.length,
+                        cellSize: this.cellSize,
+                        mazeLayout: this.mazeLayout
+                    });
+                } catch (error) {
+                    console.error('Error initializing minimap:', error);
+                }
+            }
+
+            updateMinimap() {
+                if (!this.minimapCtx || !this.minimapCanvas) {
+                    console.log('Minimap not initialized');
+                    return;
+                }
+
+                var ctx = this.minimapCtx;
+                var canvas = this.minimapCanvas;
+
+                // Clear canvas
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Draw maze cells
+                if (this.mazeLayout && this.mazeLayout.length > 0) {
+                    // Calculate cell size to fit the maze in the canvas with padding
+                    var padding = 20;
+                    var cellSize = Math.min(
+                        (canvas.width - padding * 2) / this.mazeLayout[0].length,
+                        (canvas.height - padding * 2) / this.mazeLayout.length
+                    );
+
+                    // Center the maze in the canvas
+                    var offsetX = (canvas.width - this.mazeLayout[0].length * cellSize) / 2;
+                    var offsetY = (canvas.height - this.mazeLayout.length * cellSize) / 2;
+
+                    // Draw each cell
+                    for (var i = 0; i < this.mazeLayout.length; i++) {
+                        for (var j = 0; j < this.mazeLayout[i].length; j++) {
+                            var cellX = j * cellSize + offsetX;
+                            var cellY = i * cellSize + offsetY;
+                            ctx.fillStyle = this.mazeLayout[i][j] === 1 ? '#FFFFFF' : '#444444';
+                            ctx.fillRect(cellX, cellY, cellSize - 1, cellSize - 1);
+                        }
+                    }
+
+                    // Draw player position
+                    if (this.camera) {
+                        // Convert world coordinates to minimap coordinates
+                        var playerX = (this.camera.position.x / 20) * cellSize + offsetX;
+                        var playerZ = (this.camera.position.z / 20) * cellSize + offsetY;
+                        
+                        // Draw player dot
+                        ctx.fillStyle = '#FF0000';
+                        ctx.beginPath();
+                        ctx.arc(playerX, playerZ, cellSize/3, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        // Draw direction arrow
+                        if (this.controls) {
+                            var rotation = this.controls.getObject().rotation.y;
+                            var arrowLength = cellSize;
+                            var arrowX = playerX + Math.sin(rotation) * arrowLength;
+                            var arrowZ = playerZ + Math.cos(rotation) * arrowLength;
+                            
+                            ctx.strokeStyle = '#FF0000';
+                            ctx.lineWidth = 2;
+                            ctx.beginPath();
+                            ctx.moveTo(playerX, playerZ);
+                            ctx.lineTo(arrowX, arrowZ);
+                            ctx.stroke();
+                        }
+                    }
+                } else {
+                    console.log('No maze layout available');
+                }
+            }
+
+            
+
+            gameLoop() {
+                requestAnimationFrame(() => this.gameLoop());
+                this.updateMovement();
+                this.updateMinimap();
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+            // Start the game
+            try {
+                const game = new Game();
+            } catch (error) {
+                console.error('Error starting game:', error);
+            }
+        });
+    </script>
+</body>
+</html>
