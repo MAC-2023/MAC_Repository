@@ -1,9 +1,6 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Fun Blast Game">
     <title>Fun Blast</title>
     <style>
         body { margin: 0; overflow: hidden; }
@@ -55,10 +52,10 @@
     </div>
     <div id="menu">
         <h1>Fun Blast</h1>
-        <button id="startButton">Start Game</button>
+        <button onclick="startGame()">Start Game</button>
         <div id="gameOver" style="display: none; margin-top: 20px;">
             <h2>Game Over!</h2>
-            <p>Final Score: <span id="finalScore">0</span></p>
+            <p>Final Score: <span>0</span></p>
             <button onclick="startGame()">Play Again</button>
             <button onclick="navigator.clipboard.writeText(`I scored ${score} in Fun Blast!`)" 
                     style="margin-top: 10px; background: #2196F3;">Share Score</button>
@@ -67,10 +64,948 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
-    <script src="scripts/player.js"></script>
-    <script src="scripts/aliens.js"></script>
-    <script src="scripts/maze.js"></script>
-    <script src="scripts/audio.js"></script>
-    <script src="scripts/main.js"></script>
+    
+    <script>
+        let scene, camera, renderer, controls;
+        let bullets = [], enemies = [], obstacles = [], powerups = [], enemyBullets = [];
+        let moveSpeed = 0.1, mouseSensitivity = 0.002, shotgunActive = false;
+        let health = 100, ammo = 30, score = 0, wave = 1, shieldActive = false, shieldTime = 0, velocityY = 0;
+        let clock = new THREE.Clock();
+        const gravity = 0.02;
+        const raycaster = new THREE.Raycaster();
+        let minimapCanvas, minimapCtx;
+        const gridSize = 20;
+        const cellSize = 5;
+        let maze;
+        let lastShieldUpdate = 0;
+        let wallTexture;
+        let combinedMaterial;
+        let audioContext;
+        let backgroundMusic;
+        let playerShootSound;
+        let enemyShootSound;
+        let explosionSound;
+        let powerupSound;
+        let gameOverSound;
+        let keys = {};
+        
+        function init() {
+            // Initialize audio
+            initAudio();
+            
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Load wall texture
+            const textureLoader = new THREE.TextureLoader();
+            wallTexture = textureLoader.load('https://threejs.org/examples/textures/brick_diffuse.jpg');
+            wallTexture.wrapS = THREE.RepeatWrapping;
+            wallTexture.wrapT = THREE.RepeatWrapping;
+            wallTexture.repeat.set(0.5, 0.5);
+
+            // Star field with reduced number of stars
+            const stars = new THREE.BufferGeometry();
+            const starVertices = [];
+            for(let i = 0; i < 2000; i++) { // Reduced from 5000
+                starVertices.push(
+                    THREE.MathUtils.randFloatSpread(2000),
+                    THREE.MathUtils.randFloatSpread(2000),
+                    THREE.MathUtils.randFloatSpread(2000)
+                );
+            }
+            stars.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+            scene.add(new THREE.Points(stars, new THREE.PointsMaterial({color: 0xFFFFFF})));
+
+            // Simplified lighting setup
+            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+            const light = new THREE.PointLight(0xffffff, 0.5);
+            light.position.set(0, 10, 0);
+            scene.add(light);
+
+            // Fixed controls
+            controls = new THREE.PointerLockControls(camera, document.body);
+            document.addEventListener('click', () => controls.lock());
+            
+            // Floor with simplified material
+            let floor = new THREE.Mesh(
+                new THREE.PlaneGeometry(100, 100),
+                new THREE.MeshBasicMaterial({ 
+                    color: 0x444444
+                })
+            );
+            floor.rotation.x = -Math.PI/2;
+            scene.add(floor);
+
+            generateObstacles();
+
+            // Initialize minimap
+            minimapCanvas = document.getElementById('minimap');
+            minimapCtx = minimapCanvas.getContext('2d');
+            minimapCanvas.width = 200;
+            minimapCanvas.height = 200;
+
+            // Add event listeners
+            document.addEventListener('keydown', e => keys[e.code] = true);
+            document.addEventListener('keyup', e => delete keys[e.code]);
+            document.addEventListener('mousedown', () => {
+                if (controls.isLocked) {
+                    shoot();
+                }
+            });
+        }
+
+        function initAudio() {
+            try {
+                // Create audio context only if it doesn't exist
+                if (!audioContext) {
+                    console.log('Creating new audio context');
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+
+                // Base64-encoded WAV file of a Star Wars blaster sound
+                const laserSoundBase64 = "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";
+
+                // Convert Base64 to ArrayBuffer
+                const binaryString = window.atob(laserSoundBase64);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+
+                // Decode the audio data once and use it for both player and enemy sounds
+                audioContext.decodeAudioData(bytes.buffer, function(buffer) {
+                    console.log('Successfully decoded audio data');
+                    playerShootSound = { buffer: buffer };
+                    enemyShootSound = { buffer: buffer };
+                    console.log('Loaded Star Wars blaster sound for both player and enemies');
+                }, function(error) {
+                    console.error('Error decoding audio data:', error);
+                    createFallbackSound();
+                });
+
+                // Create explosion sound
+                const explosionBuffer = audioContext.createBuffer(1, 44100 * 0.3, 44100);
+                const explosionData = explosionBuffer.getChannelData(0);
+                for(let i = 0; i < explosionData.length; i++) {
+                    explosionData[i] = Math.random() * 2 - 1;
+                }
+                explosionSound = { buffer: explosionBuffer };
+                console.log('Created explosion sound');
+
+                // Create powerup sound
+                const powerupBuffer = audioContext.createBuffer(1, 44100 * 0.2, 44100);
+                const powerupData = powerupBuffer.getChannelData(0);
+                for(let i = 0; i < powerupData.length; i++) {
+                    powerupData[i] = Math.sin(i * 0.1) * Math.exp(-i * 0.02);
+                }
+                powerupSound = { buffer: powerupBuffer };
+                console.log('Created powerup sound');
+
+                // Create game over sound
+                const gameOverBuffer = audioContext.createBuffer(1, 44100 * 0.5, 44100);
+                const gameOverData = gameOverBuffer.getChannelData(0);
+                for(let i = 0; i < gameOverData.length; i++) {
+                    gameOverData[i] = Math.sin(i * 0.05) * Math.exp(-i * 0.01);
+                }
+                gameOverSound = { buffer: gameOverBuffer };
+                console.log('Created game over sound');
+
+                // Resume audio context if it was suspended
+                if (audioContext.state === 'suspended') {
+                    console.log('Resuming suspended audio context');
+                    audioContext.resume();
+                }
+
+                console.log('Audio system initialized successfully');
+            } catch (error) {
+                console.error('Error initializing audio:', error);
+            }
+        }
+
+        // Fallback function to create synthesized sound if Base64 decoding fails
+        function createFallbackSound() {
+            const playerShootBuffer = audioContext.createBuffer(1, 44100 * 0.15, 44100);
+            const playerShootData = playerShootBuffer.getChannelData(0);
+            
+            for(let i = 0; i < playerShootData.length; i++) {
+                const t = i / playerShootData.length;
+                const freqStart = 3000;
+                const freqEnd = 200;
+                const freq = freqStart - (freqStart - freqEnd) * Math.pow(t, 0.3);
+                const envelope = Math.pow(1 - t, 2) * (t < 0.05 ? t / 0.05 : 1);
+                
+                playerShootData[i] = (
+                    Math.sin(i * freq * 0.02) * 0.6 +
+                    Math.sin(i * freq * 0.04) * 0.3 +
+                    Math.sin(i * freq * 0.08) * 0.1 +
+                    Math.sin(i * freq * 0.16) * 0.05
+                ) * envelope;
+            }
+            
+            playerShootSound = { buffer: playerShootBuffer };
+            console.log('Created fallback synthesized blaster sound');
+        }
+
+        function playSound(sound) {
+            try {
+                if (!sound || !sound.buffer) {
+                    console.warn('Attempted to play sound that is not loaded');
+                    return;
+                }
+
+                if (!audioContext) {
+                    console.warn('Audio context not available');
+                    return;
+                }
+
+                if (audioContext.state === 'suspended') {
+                    console.log('Resuming suspended audio context');
+                    audioContext.resume();
+                }
+
+                const newSound = audioContext.createBufferSource();
+                newSound.buffer = sound.buffer;
+                newSound.connect(audioContext.destination);
+                newSound.start(0);
+                console.log('Sound played successfully');
+            } catch (error) {
+                console.error('Sound playback failed:', error);
+            }
+        }
+
+        function generateObstacles() {
+            // Create a grid for the maze
+            maze = Array(gridSize).fill().map(() => Array(gridSize).fill(0));
+            
+            // Simple maze generation using a basic algorithm
+            for(let i = 0; i < gridSize; i++) {
+                for(let j = 0; j < gridSize; j++) {
+                    if(i === 0 || i === gridSize-1 || j === 0 || j === gridSize-1) {
+                        maze[i][j] = 1;
+                    }
+                    else if(Math.random() < 0.3) {
+                        maze[i][j] = 1;
+                    }
+                }
+            }
+
+            // Create walls based on the maze grid
+            for(let i = 0; i < gridSize; i++) {
+                for(let j = 0; j < gridSize; j++) {
+                    if(maze[i][j] === 1) {
+                        let wall = new THREE.Mesh(
+                            new THREE.BoxGeometry(cellSize, 5, cellSize),
+                            new THREE.MeshBasicMaterial({ 
+                                map: wallTexture,
+                                color: 0xffffff
+                            })
+                        );
+                        wall.position.set(
+                            (i - gridSize/2) * cellSize + cellSize/2,
+                            2.5,
+                            (j - gridSize/2) * cellSize + cellSize/2
+                        );
+                        obstacles.push(wall);
+                        scene.add(wall);
+                    }
+                }
+            }
+        }
+
+        function findValidPosition() {
+            const maxAttempts = 100;
+            let attempts = 0;
+            let position;
+            
+            do {
+                position = new THREE.Vector3(
+                    Math.random() * 80 - 40,
+                    1,
+                    Math.random() * 80 - 40
+                );
+                attempts++;
+            } while (checkCollision(position, 1) && attempts < maxAttempts);
+            
+            return position;
+        }
+
+        function createEnemySprite(color) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 96;
+            const ctx = canvas.getContext('2d');
+
+            // Determine alien type based on color
+            const colorHex = color.toString(16).padStart(6, '0');
+            let alienType;
+            
+            switch(colorHex) {
+                case 'ff0000': alienType = 'creeper'; break;
+                case '0000ff': alienType = 'enderman'; break;
+                case 'ffff00': alienType = 'ghast'; break;
+                case '800080': alienType = 'wither'; break;
+                default: alienType = 'zombie';
+            }
+
+            // Draw the sprite
+            ctx.fillStyle = color;
+            
+            // Draw base body
+            switch(alienType) {
+                case 'creeper':
+                    ctx.fillRect(16, 16, 32, 48);
+                    ctx.fillStyle = '#000000';
+                    ctx.fillRect(24, 24, 8, 8);
+                    ctx.fillRect(32, 24, 8, 8);
+                    ctx.fillRect(28, 32, 8, 8);
+                    ctx.fillRect(24, 40, 16, 4);
+                    ctx.fillStyle = color;
+                    ctx.fillRect(20, 64, 8, 24);
+                    ctx.fillRect(36, 64, 8, 24);
+                    break;
+
+                case 'enderman':
+                    ctx.fillRect(20, 8, 24, 56);
+                    ctx.fillStyle = '#000000';
+                    ctx.fillRect(24, 16, 16, 16);
+                    ctx.fillStyle = '#800080';
+                    ctx.fillRect(28, 24, 8, 8);
+                    ctx.fillRect(36, 24, 8, 8);
+                    ctx.fillStyle = color;
+                    ctx.fillRect(12, 24, 8, 32);
+                    ctx.fillRect(44, 24, 8, 32);
+                    ctx.fillRect(20, 64, 8, 24);
+                    ctx.fillRect(36, 64, 8, 24);
+                    break;
+
+                case 'ghast':
+                    ctx.beginPath();
+                    ctx.arc(32, 32, 24, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#000000';
+                    ctx.beginPath();
+                    ctx.arc(24, 24, 8, 0, Math.PI * 2);
+                    ctx.arc(40, 24, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+
+                case 'wither':
+                    ctx.fillRect(20, 32, 24, 24);
+                    ctx.fillStyle = '#000000';
+                    ctx.fillRect(16, 16, 16, 16);
+                    ctx.fillRect(32, 16, 16, 16);
+                    ctx.fillRect(24, 8, 16, 16);
+                    ctx.fillStyle = '#ff0000';
+                    ctx.fillRect(20, 24, 4, 4);
+                    ctx.fillRect(24, 24, 4, 4);
+                    ctx.fillRect(40, 24, 4, 4);
+                    ctx.fillRect(44, 24, 4, 4);
+                    ctx.fillRect(28, 16, 4, 4);
+                    ctx.fillRect(32, 16, 4, 4);
+                    break;
+
+                case 'zombie':
+                    ctx.fillRect(16, 16, 32, 48);
+                    ctx.fillStyle = '#000000';
+                    ctx.fillRect(24, 24, 4, 4);
+                    ctx.fillRect(36, 24, 4, 4);
+                    ctx.fillStyle = color;
+                    ctx.fillRect(12, 24, 8, 32);
+                    ctx.fillRect(44, 24, 8, 32);
+                    ctx.fillRect(20, 64, 8, 24);
+                    ctx.fillRect(36, 64, 8, 24);
+                    break;
+            }
+
+            // Create texture from canvas
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+
+            // Create sprite material
+            const material = new THREE.SpriteMaterial({ 
+                map: texture,
+                color: 0xffffff
+            });
+            
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(2, 3, 1);
+            
+            return sprite;
+        }
+
+        function createEnemy(color, speed, health, points) {
+            let enemy = createEnemySprite(color);
+            enemy.speed = speed;
+            enemy.health = health;
+            enemy.points = points;
+            enemy.lastShot = 0;
+            enemy.shootCooldown = 2 + Math.random() * 2;
+            return enemy;
+        }
+
+        function spawnEnemies() {
+            for(let i=0; i<wave*5; i++) {
+                let enemyType = Math.random();
+                let enemy;
+                
+                if(enemyType < 0.2) { // 20% chance for red (Creeper) enemies
+                    enemy = createEnemy(0xff0000, 0.03, 3, 30);
+                } else if(enemyType < 0.4) { // 20% chance for blue (Enderman) enemies
+                    enemy = createEnemy(0x0000ff, 0.05, 1, 15);
+                } else if(enemyType < 0.6) { // 20% chance for yellow (Ghast) enemies
+                    enemy = createEnemy(0xffff00, 0.015, 2, 20);
+                    enemy.isBomber = true;
+                } else if(enemyType < 0.8) { // 20% chance for purple (Wither) enemies
+                    enemy = createEnemy(0x800080, 0.02, 2, 25);
+                    enemy.isTeleporter = true;
+                    enemy.teleportCooldown = 0;
+                } else { // 20% chance for regular green (Zombie) enemies
+                    enemy = createEnemy(0x00ff00, 0.02, 1, 10);
+                }
+                
+                let position = findValidPosition();
+                enemy.position.copy(position);
+                enemies.push(enemy);
+                scene.add(enemy);
+            }
+        }
+
+        function createPowerup(type) {
+            let geometry, color;
+            switch(type) {
+                case 'ammo':
+                    geometry = new THREE.CylinderGeometry(1,1,2);
+                    color = 0x0000ff;
+                    break;
+                case 'shotgun':
+                    geometry = new THREE.OctahedronGeometry(1.5);
+                    color = 0xffff00;
+                    break;
+                case 'health':
+                    geometry = new THREE.BoxGeometry(1.5,1.5,1.5);
+                    color = 0xff0000;
+                    break;
+                case 'shield':
+                    geometry = new THREE.DodecahedronGeometry(1.5);
+                    color = 0x00ff00;
+                    break;
+                case 'speed':
+                    geometry = new THREE.IcosahedronGeometry(1.5);
+                    color = 0xff00ff;
+                    break;
+                case 'doublePoints':
+                    geometry = new THREE.TetrahedronGeometry(1.5);
+                    color = 0x00ffff;
+                    break;
+                case 'invincibility':
+                    geometry = new THREE.TorusGeometry(1, 0.5, 16, 100);
+                    color = 0xffffff;
+                    break;
+            }
+            
+            let powerup = new THREE.Mesh(
+                geometry,
+                new THREE.MeshBasicMaterial({ color })
+            );
+            
+            let position = findValidPosition();
+            position.y = 1.5;
+            powerup.position.copy(position);
+            powerup.type = type;
+            powerups.push(powerup);
+            scene.add(powerup);
+        }
+
+        function checkCollision(pos, radius=0.5) {
+            return obstacles.some(obstacle => {
+                const box = new THREE.Box3().setFromObject(obstacle);
+                return box.intersectsSphere(new THREE.Sphere(pos, radius));
+            });
+        }
+
+        function updatePlayer() {
+            let delta = clock.getDelta();
+            let direction = new THREE.Vector3();
+            
+            if(keys.KeyW) direction.z -= moveSpeed;
+            if(keys.KeyS) direction.z += moveSpeed;
+            if(keys.KeyA) direction.x -= moveSpeed;
+            if(keys.KeyD) direction.x += moveSpeed;
+            if(keys.Space && checkGrounded()) velocityY = 0.15;
+            if(keys.ShiftLeft) direction.multiplyScalar(1.5);
+
+            velocityY -= gravity;
+            direction.applyQuaternion(camera.quaternion);
+            
+            // Horizontal movement
+            let newPos = camera.position.clone().add(direction);
+            if(!checkCollision(new THREE.Vector3(newPos.x, camera.position.y, newPos.z))) {
+                camera.position.copy(newPos);
+            }
+
+            // Vertical movement
+            let verticalPos = camera.position.clone().add(new THREE.Vector3(0, velocityY, 0));
+            if(!checkCollision(verticalPos)) {
+                camera.position.y += velocityY;
+            }
+
+            if(camera.position.y < 1.6) {
+                camera.position.y = 1.6;
+                velocityY = 0;
+            }
+        }
+
+        function checkGrounded() {
+            const groundCheck = camera.position.clone();
+            groundCheck.y -= 1.6;
+            return checkCollision(groundCheck, 0.1);
+        }
+
+        function shoot() {
+            if(ammo <= 0) return;
+            ammo -= shotgunActive ? 3 : 1;
+
+            playSound(playerShootSound);
+
+            const spread = shotgunActive ? 0.2 : 0;
+            for(let i=0; i<(shotgunActive ? 8 : 1); i++) {
+                // Create laser-like shape (much longer and thinner)
+                const laserGeometry = new THREE.CylinderGeometry(0.02, 0.02, 2, 8);
+                const laserMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0x00ffff,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                let laser = new THREE.Mesh(laserGeometry, laserMaterial);
+                
+                // Offset the laser start position to appear as shooting from the hip
+                let direction = new THREE.Vector3();
+                camera.getWorldDirection(direction);
+                let offset = new THREE.Vector3(
+                    (Math.random()-0.5)*spread,
+                    (Math.random()-0.5)*spread,
+                    (Math.random()-0.5)*spread
+                ).normalize();
+                
+                // Start laser from hip position (offset from camera)
+                let hipOffset = new THREE.Vector3(0.5, -0.5, 0); // Offset to the right and down
+                hipOffset.applyQuaternion(camera.quaternion); // Rotate offset with camera
+                laser.position.copy(camera.position).add(hipOffset);
+                
+                // Calculate final direction with spread
+                let finalDirection = direction.clone().add(offset).normalize();
+                laser.velocity = finalDirection.multiplyScalar(0.05); // Slowed down to 0.05
+                
+                // Set initial rotation to align with direction
+                laser.quaternion.setFromUnitVectors(
+                    new THREE.Vector3(0, 1, 0), // Default cylinder direction
+                    finalDirection // Desired direction
+                );
+                
+                bullets.push(laser);
+                scene.add(laser);
+
+                // Add glow effect (slightly larger than laser)
+                const glowGeometry = new THREE.CylinderGeometry(0.04, 0.04, 2.2, 8);
+                const glowMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x00ffff,
+                    transparent: true,
+                    opacity: 0.2
+                });
+                let glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                glow.position.copy(laser.position);
+                glow.quaternion.copy(laser.quaternion);
+                laser.glow = glow;
+                scene.add(glow);
+            }
+        }
+
+        
+
+        function updateBullets() {
+            for(let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                if (!bullet) continue;
+
+                bullet.position.add(bullet.velocity);
+                
+                // Update glow position if it exists
+                if (bullet.glow) {
+                    bullet.glow.position.copy(bullet.position);
+                    bullet.glow.quaternion.copy(bullet.quaternion);
+                }
+                
+                // Update laser orientation to face direction of travel
+                bullet.quaternion.setFromUnitVectors(
+                    new THREE.Vector3(0, 1, 0), // Default cylinder direction
+                    bullet.velocity.normalize() // Current direction of travel
+                );
+                
+                if(bullet.position.distanceTo(camera.position) > 100) {
+                    scene.remove(bullet);
+                    if (bullet.glow) scene.remove(bullet.glow);
+                    bullets.splice(i, 1);
+                    continue;
+                }
+                
+                // Check enemy hits
+                for(let j = enemies.length - 1; j >= 0; j--) {
+                    const enemy = enemies[j];
+                    if (!enemy) continue;
+
+                    if(bullet.position.distanceTo(enemy.position) < 1.5) {
+                        enemy.health--;
+                        if(enemy.health <= 0) {
+                            // Play explosion sound
+                            playSound(explosionSound);
+
+                            // Enhanced explosion effect
+                            const particleCount = 8;
+                            for(let k = 0; k < particleCount; k++) {
+                                let explosion = new THREE.Mesh(
+                                    new THREE.CylinderGeometry(0.2, 0.2, 0.4, 8),
+                                    new THREE.MeshBasicMaterial({ 
+                                        color: enemy.material.color.getHex(),
+                                        transparent: true,
+                                        opacity: 0.8
+                                    })
+                                );
+                                explosion.position.copy(enemy.position);
+                                explosion.velocity = new THREE.Vector3(
+                                    (Math.random() - 0.5) * 0.3,
+                                    Math.random() * 0.3,
+                                    (Math.random() - 0.5) * 0.3
+                                );
+                                
+                                // Set explosion particle orientation
+                                explosion.quaternion.setFromUnitVectors(
+                                    new THREE.Vector3(0, 1, 0),
+                                    explosion.velocity.normalize()
+                                );
+                                
+                                explosions.push(explosion);
+                                scene.add(explosion);
+                            }
+
+                            // Add points based on enemy type
+                            let points = enemy.points;
+                            if(doublePointsActive) points *= 2;
+                            if(shieldActive) points += 10;
+                            score += points;
+
+                            scene.remove(enemy);
+                            enemies.splice(j, 1);
+                        }
+                        scene.remove(bullet);
+                        if (bullet.glow) scene.remove(bullet.glow);
+                        bullets.splice(i, 1);
+                        break;
+                    }
+                }
+            }
+        }
+
+        function updateEnemyBullets() {
+            enemyBullets.forEach((bullet, index) => {
+                bullet.position.add(bullet.velocity);
+                
+                // Remove bullets that go too far
+                if(bullet.position.distanceTo(camera.position) > 100) {
+                    scene.remove(bullet);
+                    enemyBullets.splice(index, 1);
+                    return;
+                }
+                
+                // Check for player hit
+                if(bullet.position.distanceTo(camera.position) < 1.5) {
+                    if(!shieldActive && !invincibilityActive) {
+                        health -= 5; // Enemy bullets do 5 damage
+                    }
+                    scene.remove(bullet);
+                    enemyBullets.splice(index, 1);
+                }
+            });
+        }
+
+        let explosions = [];
+        let doublePointsActive = false;
+        let speedBoostActive = false;
+        let invincibilityActive = false;
+
+        function updateExplosions() {
+            explosions.forEach((explosion, index) => {
+                explosion.position.add(explosion.velocity);
+                explosion.velocity.y -= 0.01;
+                if(explosion.material.opacity <= 0) {
+                    scene.remove(explosion);
+                    explosions.splice(index, 1);
+                }
+            });
+        }
+
+        function checkPowerups() {
+            powerups.forEach((powerup, index) => {
+                if(powerup.position.distanceTo(camera.position) < 2) {
+                    // Play powerup sound
+                    playSound(powerupSound);
+
+                    switch(powerup.type) {
+                        case 'ammo':
+                            ammo += 20;
+                            break;
+                        case 'shotgun':
+                            shotgunActive = true;
+                            setTimeout(() => {
+                                shotgunActive = false;
+                                document.getElementById('shotgunIndicator').style.display = 'none';
+                            }, 10000);
+                            document.getElementById('shotgunIndicator').style.display = 'block';
+                            break;
+                        case 'health':
+                            health = Math.min(100, health + 25);
+                            break;
+                        case 'shield':
+                            shieldActive = true;
+                            shieldTime = 10;
+                            lastShieldUpdate = clock.getElapsedTime();
+                            document.getElementById('shieldTimer').style.display = 'block';
+                            document.getElementById('shieldTime').textContent = Math.ceil(shieldTime);
+                            break;
+                        case 'speed':
+                            speedBoostActive = true;
+                            moveSpeed *= 1.5;
+                            setTimeout(() => {
+                                speedBoostActive = false;
+                                moveSpeed /= 1.5;
+                            }, 15000);
+                            break;
+                        case 'doublePoints':
+                            doublePointsActive = true;
+                            setTimeout(() => {
+                                doublePointsActive = false;
+                            }, 20000);
+                            break;
+                        case 'invincibility':
+                            invincibilityActive = true;
+                            setTimeout(() => {
+                                invincibilityActive = false;
+                            }, 8000);
+                            break;
+                    }
+                    scene.remove(powerup);
+                    powerups.splice(index, 1);
+                }
+            });
+        }
+
+        function updateUI() {
+            document.getElementById('health').textContent = parseInt(health);
+            document.getElementById('ammo').textContent = ammo;
+            document.getElementById('score').textContent = score;
+            document.getElementById('wave').textContent = wave;
+            document.getElementById('alienCount').textContent = enemies.length;
+            
+            if(shieldActive) {
+                const currentTime = clock.getElapsedTime();
+                const deltaTime = currentTime - lastShieldUpdate;
+                shieldTime = Math.max(0, shieldTime - deltaTime);
+                lastShieldUpdate = currentTime;
+                
+                document.getElementById('shieldTime').textContent = Math.ceil(shieldTime);
+                if(shieldTime <= 0) {
+                    shieldActive = false;
+                    document.getElementById('shieldTimer').style.display = 'none';
+                }
+            }
+        }
+
+        function drawMinimap() {
+            minimapCtx.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+            
+            // Draw walls
+            minimapCtx.fillStyle = '#ff4444';
+            for(let i = 0; i < gridSize; i++) {
+                for(let j = 0; j < gridSize; j++) {
+                    if(maze[i][j] === 1) {
+                        minimapCtx.fillRect(
+                            (i / gridSize) * minimapCanvas.width,
+                            (j / gridSize) * minimapCanvas.height,
+                            minimapCanvas.width / gridSize,
+                            minimapCanvas.height / gridSize
+                        );
+                    }
+                }
+            }
+
+            // Draw enemies
+            minimapCtx.fillStyle = '#00ff00';
+            enemies.forEach(enemy => {
+                const x = ((enemy.position.x + 50) / 100) * minimapCanvas.width;
+                const y = ((enemy.position.z + 50) / 100) * minimapCanvas.height;
+                minimapCtx.beginPath();
+                minimapCtx.arc(x, y, 3, 0, Math.PI * 2);
+                minimapCtx.fill();
+            });
+
+            // Draw player
+            minimapCtx.fillStyle = '#ffffff';
+            const playerX = ((camera.position.x + 50) / 100) * minimapCanvas.width;
+            const playerY = ((camera.position.z + 50) / 100) * minimapCanvas.height;
+            minimapCtx.beginPath();
+            minimapCtx.arc(playerX, playerY, 4, 0, Math.PI * 2);
+            minimapCtx.fill();
+
+            // Draw player direction indicator
+            minimapCtx.strokeStyle = '#ffffff';
+            minimapCtx.lineWidth = 2;
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            const angle = Math.atan2(direction.x, direction.z);
+            minimapCtx.beginPath();
+            minimapCtx.moveTo(playerX, playerY);
+            minimapCtx.lineTo(
+                playerX + Math.sin(angle) * 8,
+                playerY + Math.cos(angle) * 8
+            );
+            minimapCtx.stroke();
+        }
+
+        function updateEnemyAnimations() {
+            // Removed animation updates to improve performance
+        }
+
+        function gameLoop() {
+            try {
+                if(health <= 0 && !invincibilityActive) {
+                    // Play game over sound
+                    playSound(gameOverSound);
+
+                    // Show game over screen
+                    document.getElementById('menu').style.display = 'block';
+                    document.getElementById('gameOver').style.display = 'block';
+                    document.querySelector('#gameOver h2').textContent = 'You are dead!';
+                    document.querySelector('#gameOver p').textContent = `Final Score: ${score}`;
+                    
+                    // Unlock controls to allow menu interaction
+                    controls.unlock();
+                    
+                    // Stop the game loop
+                    return;
+                }
+                
+                if(enemies.length === 0) {
+                    wave++;
+                    ammo = Math.min(ammo + 20, 100); // Give 20 bullets, cap at 100
+                    spawnEnemies();
+                    // Spawn more powerups each wave
+                    const powerupTypes = ['ammo', 'shotgun', 'health', 'shield', 'speed', 'doublePoints', 'invincibility'];
+                    for(let i = 0; i < Math.min(wave * 2, 8); i++) {
+                        createPowerup(powerupTypes[Math.floor(Math.random() * powerupTypes.length)]);
+                    }
+                }
+
+                // Update game state
+                updatePlayer();
+                updateEnemies();
+                updateBullets();
+                updateEnemyBullets();
+                updateExplosions();
+                checkPowerups();
+                updateUI();
+                drawMinimap();
+                
+                renderer.render(scene, camera);
+                requestAnimationFrame(gameLoop);
+            } catch (error) {
+                console.error('Game loop error:', error);
+                // Attempt to recover by resetting critical game state
+                health = 100;
+                ammo = 30;
+                enemies = [];
+                bullets = [];
+                enemyBullets = [];
+                powerups = [];
+                explosions = [];
+                controls.unlock();
+                document.getElementById('menu').style.display = 'block';
+            }
+        }
+
+        function startGame() {
+            // Reset game state
+            health = 100;
+            ammo = 30;
+            score = 0;
+            wave = 1;
+            shieldActive = false;
+            shotgunActive = false;
+            doublePointsActive = false;
+            speedBoostActive = false;
+            invincibilityActive = false;
+            
+            // Clear scene
+            enemies.forEach(e => scene.remove(e));
+            bullets.forEach(b => scene.remove(b));
+            enemyBullets.forEach(b => scene.remove(b));
+            powerups.forEach(p => scene.remove(p));
+            obstacles.forEach(o => scene.remove(o));
+            explosions.forEach(e => scene.remove(e));
+            
+            enemies = [];
+            bullets = [];
+            enemyBullets = [];
+            powerups = [];
+            obstacles = [];
+            explosions = [];
+            
+            // Generate new maze
+            generateObstacles();
+            
+            // Reset camera to a valid position
+            let startPos = findValidPosition();
+            startPos.y = 5; // Start slightly above ground
+            camera.position.copy(startPos);
+            
+            // Reset UI
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('shotgunIndicator').style.display = 'none';
+            document.getElementById('shieldTimer').style.display = 'none';
+            
+            // Lock controls and start game
+            controls.lock();
+            
+            // Initialize audio context on user interaction
+            if (!audioContext) {
+                console.log('Creating new audio context');
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            
+            if (audioContext.state === 'suspended') {
+                console.log('Resuming suspended audio context');
+                audioContext.resume();
+            }
+            
+            // Initialize audio if not already done
+            if (!playerShootSound || !enemyShootSound) {
+                console.log('Reinitializing audio system');
+                initAudio();
+            }
+            
+            spawnEnemies();
+            gameLoop();
+        }
+
+        init();
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
 </body>
 </html>
