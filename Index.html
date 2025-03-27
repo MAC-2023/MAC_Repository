@@ -1,1 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Maze Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://threejs.org/examples/js/controls/PointerLockControls.js"></script>
+</head>
+<body>
+    <script>
+        // Basic setup
+        let scene, camera, renderer, controls;
+        const objects = [];
 
+        const mazeWidth = 10;
+        const mazeHeight = 10;
+        const cellSize = 10;
+
+        // Directions for maze generation (North, South, East, West)
+        const directions = [
+            { x: 0, z: -1 }, // North
+            { x: 0, z: 1 },  // South
+            { x: 1, z: 0 },  // East
+            { x: -1, z: 0 }  // West
+        ];
+
+        // Initialize scene
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // PointerLockControls for first-person view
+            controls = new THREE.PointerLockControls(camera, document.body);
+            document.addEventListener('click', () => {
+                controls.lock();
+            });
+
+            scene.add(controls.getObject());
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff);
+            scene.add(ambientLight);
+
+            // Floor
+            const floorGeometry = new THREE.PlaneGeometry(mazeWidth * cellSize, mazeHeight * cellSize);
+            const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x808080 });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+
+            // Generate and add maze walls
+            const maze = generateMaze(mazeWidth, mazeHeight);
+            addMazeToScene(maze);
+
+            camera.position.set(5, 2, -5);
+
+            // Animate the scene
+            animate();
+        }
+
+        // Generate maze using depth-first search algorithm
+        function generateMaze(width, height) {
+            const maze = Array.from({ length: height }, () => Array(width).fill(1));
+            const stack = [];
+            const start = { x: 0, z: 0 };
+
+            maze[start.z][start.x] = 0;
+            stack.push(start);
+
+            while (stack.length > 0) {
+                const current = stack.pop();
+                const neighbors = getUnvisitedNeighbors(current, maze);
+
+                if (neighbors.length > 0) {
+                    stack.push(current);
+
+                    const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    maze[(current.z + next.z) / 2][(current.x + next.x) / 2] = 0;
+                    maze[next.z][next.x] = 0;
+
+                    stack.push(next);
+                }
+            }
+
+            return maze;
+        }
+
+        // Get unvisited neighbors
+        function getUnvisitedNeighbors(cell, maze) {
+            const neighbors = [];
+
+            for (const direction of directions) {
+                const nx = cell.x + direction.x * 2;
+                const nz = cell.z + direction.z * 2;
+
+                if (nx >= 0 && nx < maze[0].length && nz >= 0 && nz < maze.length && maze[nz][nx] === 1) {
+                    neighbors.push({ x: nx, z: nz });
+                }
+            }
+
+            return neighbors;
+        }
+
+        // Add maze walls to the scene
+        function addMazeToScene(maze) {
+            const wallGeometry = new THREE.BoxGeometry(cellSize, 10, cellSize);
+            const wallMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+
+            for (let z = 0; z < maze.length; z++) {
+                for (let x = 0; x < maze[z].length; x++) {
+                    if (maze[z][x] === 1) {
+                        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+                        wall.position.set(x * cellSize, 5, -z * cellSize);
+                        scene.add(wall);
+                        objects.push(wall);
+                    }
+                }
+            }
+        }
+
+        // Animate function
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Key controls
+        const keys = {
+            ArrowUp: false,
+            ArrowDown: false,
+            ArrowLeft: false,
+            ArrowRight: false,
+            KeyW: false,
+            KeyA: false,
+            KeyS: false,
+            KeyD: false,
+        };
+
+        document.addEventListener('keydown', (event) => {
+            keys[event.code] = true;
+        });
+
+        document.addEventListener('keyup', (event) => {
+            keys[event.code] = false;
+        });
+
+        // Movement logic
+        function move() {
+            const speed = 0.1;
+            if (keys.KeyW || keys.ArrowUp) controls.moveForward(speed);
+            if (keys.KeyS || keys.ArrowDown) controls.moveForward(-speed);
+            if (keys.KeyA || keys.ArrowLeft) controls.moveRight(-speed);
+            if (keys.KeyD || keys.ArrowRight) controls.moveRight(speed);
+        }
+
+        // Call the init function to set up the game
+        init();
+
+        // Update function
+        function update() {
+            move();
+            requestAnimationFrame(update);
+        }
+
+        update();
+    </script>
+</body>
+</html>
