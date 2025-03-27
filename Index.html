@@ -51,9 +51,7 @@
 
             // PointerLockControls for first-person view
             controls = new THREE.PointerLockControls(camera, document.body);
-            document.addEventListener('click', () => {
-                controls.lock();
-            });
+            document.addEventListener('click', () => controls.lock());
 
             scene.add(controls.getObject());
 
