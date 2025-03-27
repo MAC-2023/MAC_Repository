@@ -191,8 +191,8 @@
 
         // Update the player's position and direction on the mini map
         function updateMiniMap() {
-            const miniMapScaleX = miniMapCanvas.width / mazeWidth;
-            const miniMapScaleY = miniMapCanvas.height / mazeHeight;
+            const miniMapScaleX = miniMapCanvas.width / (mazeWidth * cellSize);
+            const miniMapScaleY = miniMapCanvas.height / (mazeHeight * cellSize);
 
             // Clear the previous player position
             miniMapContext.clearRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
@@ -200,8 +200,8 @@
 
             // Draw the player position and direction
             miniMapContext.fillStyle = 'red';
-            const playerX = (controls.getObject().position.x / mazeWidth) * miniMapCanvas.width;
-            const playerZ = (controls.getObject().position.z / mazeHeight) * miniMapCanvas.height;
+            const playerX = (controls.getObject().position.x + (mazeWidth / 2) * cellSize) * miniMapScaleX;
+            const playerZ = (-(controls.getObject().position.z) + (mazeHeight / 2) * cellSize) * miniMapScaleY;
             miniMapContext.beginPath();
             miniMapContext.arc(playerX, playerZ, 5, 0, 2 * Math.PI);
             miniMapContext.fill();
