@@ -50,6 +50,10 @@
         const mazeHeight = 25; // 50% bigger
         const cellSize = 10;
 
+        // Offset variables for fine adjustments
+        const X_offset = 5;
+        const Y_offset = 5;
+
         // Directions for maze generation (North, South, East, West)
         const directions = [
             { x: 0, z: -1 }, // North
@@ -208,8 +212,8 @@
 
             // Draw the player position and direction
             miniMapContext.fillStyle = 'red';
-            const playerX = controls.getObject().position.x * miniMapScaleX;
-            const playerZ = (-controls.getObject().position.z) * miniMapScaleY;
+            const playerX = (controls.getObject().position.x * miniMapScaleX) + X_offset;
+            const playerZ = (-controls.getObject().position.z * miniMapScaleY) + Y_offset;
             miniMapContext.beginPath();
             miniMapContext.arc(playerX, playerZ, 5, 0, 2 * Math.PI);
             miniMapContext.fill();
