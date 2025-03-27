@@ -6,8 +6,24 @@
     <title>3D Maze Game</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://threejs.org/examples/js/controls/PointerLockControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #startButton {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            font-size: 20px;
+            background-color: #000;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
+    <button id="startButton">Start Game</button>
     <script>
         // Basic setup
         let scene, camera, renderer, controls;
@@ -56,7 +72,7 @@
             const maze = generateMaze(mazeWidth, mazeHeight);
             addMazeToScene(maze);
 
-            camera.position.set(5, 2, -5);
+            camera.position.set(cellSize / 2, 2, -cellSize / 2);
 
             // Animate the scene
             animate();
@@ -158,16 +174,19 @@
             if (keys.KeyD || keys.ArrowRight) controls.moveRight(speed);
         }
 
-        // Call the init function to set up the game
-        init();
+        // Start game button
+        const startButton = document.getElementById('startButton');
+        startButton.addEventListener('click', () => {
+            startButton.style.display = 'none';
+            init();
+            update();
+        });
 
         // Update function
         function update() {
             move();
             requestAnimationFrame(update);
         }
-
-        update();
     </script>
 </body>
 </html>
